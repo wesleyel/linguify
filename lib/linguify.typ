@@ -122,6 +122,63 @@
   return error(error_message)
 }
 
+#let _linguify_verbose(key, from, lang, args: auto) = {
+  let database = from
+
+  // check if database is not empty. Means no data dictionary was specified.
+  if (database == none) { return error("linguify database is empty.") }
+  let data_type = database.conf.at("data_type", default: "dict")
+
+  // get selected language.
+  let selected_lang = lang
+  let lang_not_found = not selected_lang in database.lang
+  let fallback_lang = database.conf.at("default-lang", default: none)
+
+  let args = if data_type == "ftl" {
+     if-auto-then(args, {
+      let args = database.at("ftl", default: (:)).at("args", default: (:))
+      if ( type(args) != dictionary ) { return error("expected args to be dictionary, found " + type(args))}
+      args
+     })
+  } else {
+    if args != auto {
+      return error("args not supported in dict mode")
+    } else { (:) }
+  }
+
+  let value = get_text(database.lang, key, selected_lang, mode: data_type, args: args)
+  
+  if (value != none) {
+    return ok(value)
+  }
+  
+  let error_message = if lang_not_found {
+    "Could not find language `" + selected_lang + "` in the linguify database."
+  } else {
+    "Could not find an entry for the key `" + key + "` in language `" + selected_lang + "` at the linguify database."
+  }
+
+  // Check if a fallback language is set
+  if (fallback_lang != none) {
+      let value = get_text(database.lang, key, fallback_lang, mode: data_type, args: args)
+
+      // Use the fallback language if possible
+      if (value != none) {
+        return ok(value)
+    }
+
+    // if the key is not found in the fallback language
+    
+    error_message = error_message + " Also, the fallback language `" + fallback_lang + "` does not contain the key `" + key + "`."
+
+  } else {
+    // if no fallback language is set
+    error_message = error_message + " Also, no fallback language is set."
+  }
+
+  return error(error_message)
+}
+
 
 /// fetch a string in the required language.
 /// provides context for `_linguify` function which implements the logic part.
